@@ -33,8 +33,38 @@ class Fonts {
 	 * @since  3.8.0
 	 */
 	public function __construct() {
-		add_filter( 'wphb_buffer', array( $this, 'wphb_preload_fonts' ) );
+		add_filter( 'wphb_buffer', array( $this, 'wphb_process_buffer' ), 9999 );
 		add_filter( 'wphb_minify_file_content', array( $this, 'wphb_minify_file_content' ), 10, 4 );
+		add_filter( 'wp_hummingbird_default_options', array( $this, 'wp_hummingbird_default_options' ) );
+	}
+
+	/**
+	 * Process the buffer.
+	 *
+	 * @param string $html Buffer content.
+	 *
+	 * @return string
+	 */
+	public function wphb_process_buffer( $html ) {
+		$html = $this->add_font_display_swap_to_all_font_faces( $html );
+		$html = $this->wphb_preload_fonts( $html );
+
+		return $html;
+	}
+
+	/**
+	 * Set default value for preload_fonts_mode to manual if free user is detected.
+	 *
+	 * @param array $defaults An array of default settings.
+	 *
+	 * @return array
+	 */
+	public function wp_hummingbird_default_options( $defaults ) {
+		if ( ! Utils::is_member() ) {
+			$defaults['minify']['preload_fonts_mode'] = 'manual';
+		}
+
+		return $defaults;
 	}
 
 	/**
@@ -52,6 +82,10 @@ class Fonts {
 	 * @return bool
 	 */
 	public function is_preload_enabled() {
+		if ( is_feed() ) {
+			return false;
+		}
+
 		$options = Settings::get_settings( 'minify' );
 
 		return $this->is_minify_enabled() && $options['font_optimization'];
@@ -210,6 +244,11 @@ class Fonts {
 	 */
 	public function add_preload_to_fonts_in_used_css( $html, $used_css ) {
 		if ( ! $this->is_preload_enabled() ) {
+			return $html;
+		}
+
+		$preload_fonts_mode = $this->get_preload_fonts_mode();
+		if ( 'automatic' !== $preload_fonts_mode ) {
 			return $html;
 		}
 
@@ -418,18 +457,20 @@ class Fonts {
 			return $css_content;
 		}
 
+		$font_display_value = $this->get_font_display_value();
+
 		$css_content = preg_replace_callback(
 			'/@font-face\s*{(?<display_value>[^}]+)}/i',
-			function ( $matches ) {
+			function ( $matches ) use ( $font_display_value ) {
 				if ( preg_match( '/font-display:\s*(\w*);?/i', $matches['display_value'], $attribute ) ) {
-					if ( strtolower( $attribute[1] ) === 'swap' ) {
+					if ( strtolower( $attribute[1] ) === $font_display_value ) {
 						return $matches[0];
 					}
 
-					return preg_replace( '/(font-display:\s*)\w*;?/i', '$1swap;', $matches[0] );
+					return preg_replace( '/(font-display:\s*)\w*;?/i', '$1' . $font_display_value . ';', $matches[0] );
 				}
 
-				return str_replace( $matches['display_value'], "font-display: swap;{$matches['display_value']}", $matches[0] );
+				return str_replace( $matches['display_value'], "font-display: $font_display_value;{$matches['display_value']}", $matches[0] );
 			},
 			$css_content
 		);
@@ -525,6 +566,8 @@ class Fonts {
 					$font_args['subset'] = implode( ',', $subsets );
 				}
 
+				$font_display_value = $this->get_font_display_value();
+
 				/**
 				 * Filters the display swap for Google.
 				 *
@@ -532,7 +575,7 @@ class Fonts {
 				 *
 				 * @param string
 				 */
-				$font_display = apply_filters( 'wphb_google_font_display', 'swap' );
+				$font_display = apply_filters( 'wphb_google_font_display', $font_display_value );
 
 				if ( ! empty( $font_display ) ) {
 					$font_args['display'] = $font_display;
@@ -604,5 +647,27 @@ class Fonts {
 		}
 
 		return $matches;
+	}
+
+	/**
+	 * Get the font display value.
+	 *
+	 * @return string
+	 */
+	public function get_font_display_value() {
+		$font_display_value = Settings::get_setting( 'font_display_value', 'minify' );
+
+		return ! empty( $font_display_value ) ? $font_display_value : 'swap';
+	}
+
+	/**
+	 * Get the preload fonts mode.
+	 *
+	 * @return string
+	 */
+	public function get_preload_fonts_mode() {
+		$preload_fonts_mode = Settings::get_setting( 'preload_fonts_mode', 'minify' );
+
+		return ! empty( $preload_fonts_mode ) ? $preload_fonts_mode : 'automatic';
 	}
 }

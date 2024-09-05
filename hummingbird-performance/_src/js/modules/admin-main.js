@@ -7,11 +7,6 @@
 import Fetcher from '../utils/fetcher';
 import { getString } from '../utils/helpers';
 
-/**
- * External dependencies
- */
-const MixPanel = require( 'mixpanel-browser' );
-
 ( function( $ ) {
 	'use strict';
 
@@ -79,7 +74,8 @@ const MixPanel = require( 'mixpanel-browser' );
 			 */
 			$( '#performance-run-test, #performance-scan-website, #run-performance-test' ).on(
 				'click',
-				() => {
+				function() {
+					const location = $(this).attr('data-location');
 					wphbMixPanel.track( 'plugin_scan_started', {
 						score_mobile_previous: getString(
 							'previousScoreMobile'
@@ -90,6 +86,7 @@ const MixPanel = require( 'mixpanel-browser' );
 						'AO Status': getString(
 							'aoStatus'
 						),
+						'Location': typeof location !== 'undefined' ? location : 'unknown',
 					} );
 				}
 			);

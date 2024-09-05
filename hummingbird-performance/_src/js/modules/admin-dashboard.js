@@ -42,6 +42,10 @@ import Fetcher from '../utils/fetcher';
 				} );
 			} );
 
+			$( '#wphb-switch-page-cache-method' ).on( 'click', function( e ) {
+				WPHB_Admin.caching.switchCacheMethod( e );
+			} );
+
 			// Critical CSS checkbox update status.
 			const dashboardCritical = $( '#critical_css_toggle' );
 			dashboardCritical.on( 'change', function() {
@@ -91,12 +95,21 @@ import Fetcher from '../utils/fetcher';
 		/**
 		 * Hide upgrade summary modal.
 		 *
+		 * @param {Object} event   Event.
 		 * @param {Object} element Target button that was clicked.
 		 */
-		 hideUpgradeSummary: ( element ) => {
+		 hideUpgradeSummary: ( e, element ) => {
+			e.preventDefault();
 			window.SUI.closeModal();
 			Fetcher.common.call( 'wphb_hide_upgrade_summary' ).then( () => {
-				if ( element.hasAttribute( 'href' ) ) {
+				const trackAction = element.getAttribute( 'data-track-action' );
+				if ( trackAction && trackAction !== '' ) {
+					window.wphbMixPanel.track('update_modal_displayed', {
+						'Action': trackAction,
+					});
+				}
+
+				if ( element.hasAttribute( 'href' ) && element.href.indexOf( 'wpmudev.com' ) === -1 ) {
 					window.location.href = element.href;
 				}
 			} );

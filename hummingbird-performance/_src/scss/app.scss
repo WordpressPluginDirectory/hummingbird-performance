@@ -150,7 +150,7 @@ $sui-font-path: '~@wpmudev/shared-ui/dist/fonts/';
     }
 
     a.wphb-upsell-link,
-    span.sui-icon-open-new-window:before {
+    a.wphb-upsell-link span.sui-icon-open-new-window:before {
         font-size: 11px;
         color: #8D00B1;
     }
@@ -261,5 +261,13 @@ $sui-font-path: '~@wpmudev/shared-ui/dist/fonts/';
                 }
             }
         }
+    }
+}
+#wphb-switch-page-cache-method-summary-box.sui-button-onload-text {
+    .sui-description {
+        display: none !important;
+    }
+    .sui-button-text-onload {
+        display: block !important;
     }
 }

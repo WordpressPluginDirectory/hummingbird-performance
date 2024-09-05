@@ -73,6 +73,22 @@ function Fetcher() {
 			},
 
 			/**
+			 * Save fastCGI settings method.
+			 *
+			 * @since 3.9.0
+			 * @param {string} data   Serialized form data.
+			 */
+			saveFastCGISettings: ( data ) => {
+				return request(
+					actionPrefix + 'fast_cgi_save_settings',
+					{ data },
+					'POST'
+				).then( ( response ) => {
+					return response;
+				} );
+			},
+
+			/**
 			 * Clear cache for selected module.
 			 *
 			 * @since 1.9.0
@@ -160,7 +176,20 @@ function Fetcher() {
 					.then( ( response ) => {
 						return response;
 					} );
-			}
+			},
+			
+			/**
+			 * Switch cache method.
+			 *
+			 * @since 3.9.0
+			 * @param {string} method
+			 */
+			switchCacheMethod( method ) {
+				return request( actionPrefix + 'switch_cache_method', { method }, 'POST' )
+					.then( ( response ) => {
+						return response;
+					} );
+			},
 		},
 
 		/**
@@ -582,6 +611,25 @@ function Fetcher() {
 						return response;
 					}
 				);
+			},
+		},
+
+		/**
+		 * Common action that are used for mixpanel.
+		 *
+		 * @since 3.9.4
+		 */
+		mixpanel: {
+			/**
+			 * Track mixpanel event.
+			 *
+			 * @since 3.9.4
+			 * @param {string} event
+			 * @param {object} properties
+			 */
+			trackMixpanelEvent: ( event, properties ) => {
+				const action = actionPrefix + 'analytics_track_event';
+				return request( action, { event, properties }, 'POST' );
 			},
 		},
 

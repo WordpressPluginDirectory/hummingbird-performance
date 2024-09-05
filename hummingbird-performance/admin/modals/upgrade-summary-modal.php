@@ -7,6 +7,7 @@
  */
 
 use Hummingbird\Core\Utils;
+use Hummingbird\Core\Modules\Caching\Fast_CGI;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -31,13 +32,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 					</figure>
 				<?php endif; ?>
 
-				<button class="sui-button-icon sui-button-float--right" onclick="window.WPHB_Admin.dashboard.hideUpgradeSummary( this )">
+				<button class="sui-button-icon sui-button-float--right" data-track-action="closed" onclick="window.WPHB_Admin.dashboard.hideUpgradeSummary( event, this )">
 					<span class="sui-icon-close sui-md" aria-hidden="true"></span>
 					<span class="sui-screen-reader-text"><?php esc_attr_e( 'Close this modal', 'wphb' ); ?></span>
 				</button>
 
 				<h3 id="upgrade-summary-modal-title" class="sui-box-title sui-lg" style="white-space: inherit">
-					<?php esc_html_e( 'NEW! Advanced Font Optimization', 'wphb' ); ?>
+					<?php esc_html_e( 'Experience Enhanced Mobile Responsiveness', 'wphb' ); ?>
 				</h3>
 			</div>
 
@@ -46,7 +47,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 					<p class="wphb-upgrade-item-desc" style="text-align: center">
 						<?php
 						printf(
-							esc_html__( 'Elevate site speed, Core Web Vitals, and visual stability by instructing browsers to preload critical fonts and enabling font fallbacks with a click.', 'wphb' )
+							esc_html__( 'We’ve added automatic viewport meta optimization to improve your site’s mobile performance and user experience. Enjoy better responsiveness and faster load times on mobile devices.', 'wphb' )
 						);
 						?>
 					</p>
@@ -57,24 +58,27 @@ if ( ! defined( 'ABSPATH' ) ) {
 						$hb_button      = esc_html__( 'Got it', 'wphb' );
 						$hb_button_link = '#';
 						printf( /* translators: %1$s - opening p tag, %2$s - opening <strong> tag, %3$s - closing <strong> tag, %4$s - closing p tag */
-							esc_html__( '%1$sTo enable this feature, go to %2$sAsset Optimization > Extra Optimization%3$s.%4$s', 'wphb' ),
+							esc_html__( '%1$sTo enable this feature, go to %2$sAdvanced Tools%3$s.%4$s', 'wphb' ),
 							'<p class="wphb-upgrade-item-desc" style="text-align: center;margin-top: 10px">',
 							'<strong>',
 							'</strong>',
 							'</p>'
 						);
 					} else {
-						$hb_button      = esc_html__( 'Enhance Font Performance', 'wphb' );
-						$hb_button_link = Utils::get_admin_menu_url( 'minification' ) . '&view=tools';
+						$hb_button      = esc_html__( 'CHECK IT OUT', 'wphb' );
+						$hb_button_link = Utils::get_admin_menu_url( 'advanced' );
 					}
 					?>
 				</div>
 			</div>
 
 			<div class="sui-box-footer sui-flatten sui-content-center sui-spacing-bottom--50">
-			<a href="<?php echo esc_url( $hb_button_link ); ?>" class="sui-button sui-button-blue" onclick="window.WPHB_Admin.dashboard.hideUpgradeSummary( this )">
-					<?php echo esc_html( $hb_button ); ?>
-			</a>
+				<a href="<?php echo esc_url( $hb_button_link ); ?>" data-track-action="cta_clicked" class="sui-button sui-button-blue"
+					onclick="window.WPHB_Admin.dashboard.hideUpgradeSummary( event, this )">
+					<span class="sui-button-text-default">
+						<?php echo esc_html( $hb_button ); ?>
+					</span>
+				</a>
 			</div>
 		</div>
 	</div>

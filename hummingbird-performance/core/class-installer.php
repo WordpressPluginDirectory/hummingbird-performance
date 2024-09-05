@@ -200,6 +200,14 @@ class Installer {
 				self::upgrade_3_8_0();
 			}
 
+			if ( version_compare( $version, '3.9.0', '<' ) ) {
+				self::upgrade_3_9_0();
+			}
+
+			if ( version_compare( $version, '3.9.3', '<' ) ) {
+				self::upgrade_3_9_3_0();
+			}
+
 			update_site_option( 'wphb_version', WPHB_VERSION );
 		}
 	}
@@ -687,7 +695,31 @@ class Installer {
 	 * @return void
 	 */
 	private static function upgrade_3_8_0() {
-		update_site_option( 'wphb-notice-redis-deprecation-show', 'yes' );
+		// Summary upgrade modal.
+		add_site_option( 'wphb_show_upgrade_summary', true );
+	}
+
+	/**
+	 * Enable homepage preload caching for existing user.
+	 *
+	 * @since 3.9.0
+	 *
+	 * @return void
+	 */
+	private static function upgrade_3_9_0() {
+		// Summary upgrade modal.
+		add_site_option( 'wphb_show_upgrade_summary', true );
+	}
+
+	/**
+	 * Handle Summary upgrade modal display for viewport meta and handle deprecate legacy critical css notice..
+	 *
+	 * @since 3.9.3
+	 *
+	 * @return void
+	 */
+	private static function upgrade_3_9_3_0() {
+		update_option( 'wphb-notice-legacy-critical-css-show', 'yes' );
 
 		// Summary upgrade modal.
 		add_site_option( 'wphb_show_upgrade_summary', true );

@@ -10,6 +10,7 @@ namespace Hummingbird\Admin\Ajax;
 
 use Hummingbird\Core\Settings;
 use Hummingbird\Core\Utils;
+use Hummingbird\Core\Modules\Caching\Fast_CGI;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -97,7 +98,7 @@ class Setup {
 			die();
 		}
 
-		Utils::get_api()->hosting->disable_fast_cgi();
+		Utils::get_api()->hosting->toggle_fast_cgi( false );
 
 		$this->check_requirements();
 	}
@@ -136,6 +137,13 @@ class Setup {
 			die();
 		}
 
+		$params = filter_input( INPUT_POST, 'data', FILTER_UNSAFE_RAW );
+		$params = json_decode( html_entity_decode( $params ), true );
+
+		if ( 'runPerf' === $params ) {
+			Utils::get_module( 'mixpanel_analytics' )->track_event_for_setup_performance_test();
+		}
+
 		update_option( 'wphb_run_onboarding', null );
 		wp_send_json_success();
 	}
@@ -160,7 +168,12 @@ class Setup {
 
 		// Tracking (make sure it's always updated).
 		if ( is_admin() || ( is_multisite() && is_network_admin() ) ) {
-			$tracking = isset( $settings['tracking'] ) && $settings['tracking'];
+			$tracking_value = Settings::get_setting( 'tracking', 'settings' );
+			$tracking       = isset( $settings['tracking'] ) && $settings['tracking'];
+			if ( $tracking && $tracking_value !== $tracking ) {
+				do_action( 'wphb_mixpanel_usage_tracking_value_update', true, $tracking );
+			}
+
 			Settings::update_setting( 'tracking', $tracking, 'settings' );
 		}
 
@@ -192,8 +205,19 @@ class Setup {
 				define( 'WPHB_IS_NETWORK_ADMIN', true );
 			}
 
-			if ( isset( $settings['enable'] ) && $settings['enable'] ) {
-				Utils::get_module( 'page_cache' )->enable();
+			if ( ! empty( $settings['fastCGI'] ) && Fast_CGI::is_fast_cgi_supported() ) {
+				if ( ! Utils::get_api()->hosting->has_fast_cgi() ) {
+					Utils::get_api()->hosting->toggle_fast_cgi( true );
+				}
+
+				$control = isset( $settings['clearCacheButton'] ) && $settings['clearCacheButton'];
+				Settings::update_setting( 'control', $control, 'settings' );
+				$caching_setting                              = Utils::get_module( 'page_cache' )->get_settings();
+				$caching_setting['settings']['comment_clear'] = (int) ( isset( $settings['clearOnComment'] ) && $settings['clearOnComment'] );
+
+				Utils::get_module( 'page_cache' )->save_settings( $caching_setting );
+			} elseif ( isset( $settings['enable'] ) && $settings['enable'] ) {
+				Utils::get_module( 'page_cache' )->enable( true );
 
 				$caching_setting = Utils::get_module( 'page_cache' )->get_settings();
 
@@ -205,8 +229,18 @@ class Setup {
 
 				$control = isset( $settings['clearCacheButton'] ) && $settings['clearCacheButton'];
 				Settings::update_setting( 'control', $control, 'settings' );
+
+				// Disable FastCGI if it's enabled.
+				if ( Utils::get_api()->hosting->has_fast_cgi_header() ) {
+					Utils::get_api()->hosting->toggle_fast_cgi( false );
+				}
 			} else {
 				Utils::get_module( 'page_cache' )->disable();
+
+				// Disable FastCGI if it's enabled.
+				if ( Utils::get_api()->hosting->has_fast_cgi_header() ) {
+					Utils::get_api()->hosting->toggle_fast_cgi( false );
+				}
 			}
 		} else {
 			$options = Settings::get_settings( 'advanced' );
@@ -217,14 +251,8 @@ class Setup {
 			$options['emoji']          = isset( $settings['removeEmoji'] ) && $settings['removeEmoji'];
 
 			Settings::update_settings( $options, 'advanced' );
-
-			// Maybe enable page caching on this step, if FastCGI is enabled.
-			if ( Utils::get_api()->hosting->has_fast_cgi() ) {
-				Utils::get_module( 'page_cache' )->enable();
-			}
 		}
 
 		wp_send_json_success();
 	}
-
 }

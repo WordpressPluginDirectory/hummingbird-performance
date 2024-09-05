@@ -10,7 +10,6 @@ const { __ } = wp.i18n;
 
 if ( wphb.mixpanel.enabled ) {
 	require( './mixpanel' );
-	window.wphbMixPanel.init();
 }
 
 const generatedNoticeId = 'critical-generated-notice';
@@ -92,8 +91,10 @@ const MyPluginPostStatusInfo = () => {
 						const message = 'COMPLETE' !== getResult && '' !== singlePostCriticalDetail.error_message ? singlePostCriticalDetail.error_message : __( 'Critical CSS generated successfully', 'wphb' );
 						showNotice( generatedNoticeId, message, 'COMPLETE' === getResult ? 'success' : 'error' );
 						if ( 'ERROR' === getResult ) {
-							window.wphbMixPanel.track( 'error_encountered', {
-								critical_css_error: res?.errorCode
+							const errorMessage = singlePostCriticalDetail.error_message;
+							window.wphbMixPanel.track( 'critical_css_error', {
+								'Error Type': res?.errorCode,
+								'Error Message': errorMessage.length > 256 ? errorMessage.substring( 0, 256 ) + "..." : errorMessage
 							} );
 						}
 					}

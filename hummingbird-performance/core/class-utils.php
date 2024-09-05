@@ -16,6 +16,7 @@
 namespace Hummingbird\Core;
 
 use Hummingbird\WP_Hummingbird;
+use Hummingbird\Core\Modules\Caching\Fast_CGI;
 use stdClass;
 use WP_User;
 use WPMUDEV_Dashboard;
@@ -215,18 +216,25 @@ class Utils {
 				'enableCriticalCss'       => __( 'Settings updated. Generating Critical CSS, this could take about a minute.', 'wphb' ),
 			),
 			'links'      => array(
-				'audits'        => self::get_admin_menu_url( 'performance' ),
-				'eoUrl'         => self::get_admin_menu_url( 'minification' ) . '&view=tools',
-				'tutorials'     => self::get_admin_menu_url( 'tutorials' ),
-				'notifications' => self::get_admin_menu_url( 'notifications' ),
-				'disableUptime' => add_query_arg(
+				'audits'         => self::get_admin_menu_url( 'performance' ),
+				'eoUrl'          => self::get_admin_menu_url( 'minification' ) . '&view=tools',
+				'cachingPageURL' => self::get_admin_menu_url( 'caching' ),
+				'tutorials'      => self::get_admin_menu_url( 'tutorials' ),
+				'notifications'  => self::get_admin_menu_url( 'notifications' ),
+				'disableUptime'  => add_query_arg(
 					array(
 						'action'   => 'disable',
 						'_wpnonce' => wp_create_nonce( 'wphb-toggle-uptime' ),
 					),
 					self::get_admin_menu_url( 'uptime' )
 				),
-				'resetSettings' => add_query_arg( 'wphb-clear', 'all', self::get_admin_menu_url() ),
+				'resetSettings'  => add_query_arg(
+					array(
+						'wphb-clear' => 'all',
+						'_wpnonce'   => wp_create_nonce( 'wphb-clear-cache' ),
+					),
+					self::get_admin_menu_url()
+				),
 			),
 		);
 
@@ -290,21 +298,9 @@ class Utils {
 	 * @return array
 	 */
 	public static function get_tracking_data() {
-		global $wpdb, $wp_version;
-
 		return array(
 			'mixpanel' => array(
 				'enabled'        => Settings::get_setting( 'tracking', 'settings' ),
-				'plugin'         => 'Hummingbird',
-				'plugin_type'    => self::is_member() ? 'pro' : 'free',
-				'plugin_version' => WPHB_VERSION,
-				'wp_version'     => $wp_version,
-				'wp_type'        => is_multisite() ? 'multisite' : 'single',
-				'locale'         => get_locale(),
-				'active_theme'   => wp_get_theme()->get( 'Name' ),
-				'php_version'    => PHP_VERSION,
-				'mysql_version'  => $wpdb->db_version(),
-				'server_type'    => Module_Server::get_server_type(),
 			),
 		);
 	}
@@ -742,6 +738,9 @@ class Utils {
 			case 'hosting':
 				$link = "$domain/register/$utm_tags&coupon=HUMMINGBIRD-HOSTING-1M&from_checkout=1";
 				break;
+			case 'hosting-upsell':
+				$link = "$domain/hosting/$utm_tags#dev-plans";
+				break;
 			case 'wpmudev':
 				$link = "$domain/$utm_tags";
 				break;
@@ -749,13 +748,20 @@ class Utils {
 				$link = "$domain/blog/tutorials/tutorial-category/hummingbird-pro/$utm_tags";
 				break;
 			case 'tracking':
-				$link = "$domain/docs/privacy/our-plugins/#usage-tracking";
+				if ( self::is_member() ) {
+					$link = "$domain/docs/privacy/our-plugins/#usage-tracking";
+				} else {
+					$link = "$domain/docs/privacy/our-plugins/?utm_source=hummingbird&utm_medium=plugin&utm_campaign=hummingbird_tracking_consent_docs#usage-tracking-hb";
+				}
 				break;
 			case 'wpmudev-login':
 				$link = "$domain/login?signin=$hub_campaign&hummingbird_url=" . site_url();
 				break;
 			case 'connect-url':
 				$link = self::connect_url( $domain, ltrim( $utm_tags, '?' ) );
+				break;
+			case 'expert-services':
+				$link = "$domain/hub2/services/?utm_source=hummingbird-pro&utm_medium=plugin&utm_campaign=$campaign";
 				break;
 			default:
 				$link = '';
@@ -1143,6 +1149,15 @@ class Utils {
 	}
 
 	/**
+	 * Returns count of an array.
+	 *
+	 * @param array $countable_array An array element.
+	 */
+	public static function hb_count( $countable_array ) {
+		return is_countable( $countable_array ) ? count( $countable_array ) : 0;
+	}
+
+	/**
 	 * Returns AO stats data.
 	 *
 	 * @return array
@@ -1165,7 +1180,7 @@ class Utils {
 			}
 		}
 
-		$enqueued_files = count( $collection['scripts'] ) + count( $collection['styles'] );
+		$enqueued_files = self::hb_count( $collection['scripts'] ) + self::hb_count( $collection['styles'] );
 
 		$original_size_styles  = self::calculate_sum( wp_list_pluck( $collection['styles'], 'original_size' ) );
 		$original_size_scripts = self::calculate_sum( wp_list_pluck( $collection['scripts'], 'original_size' ) );
@@ -1204,15 +1219,21 @@ class Utils {
 		$active_features  = array();
 		$minify_options   = self::get_module( 'minify' )->get_options();
 		$advanced_options = self::get_module( 'advanced' )->get_options();
+		$hb_cdn           = false;
 
 		// CDN.
 		if ( self::get_module( 'minify' )->is_active() && $minify_options['use_cdn'] ) {
 			$active_features[] = 'CDN';
+			$hb_cdn            = true;
 		}
 
 		// Critical CSS.
 		if ( self::get_module( 'minify' )->is_active() && ! empty( $minify_options['critical_css'] ) ) {
-			$active_features[] = 'Critical CSS';
+			if ( 'remove' === $minify_options['critical_css_type'] ) {
+				$active_features[] = 'user_interaction_with_remove' === $minify_options['critical_css_remove_type'] ? 'criticalcss_fullpage_interaction' : 'criticalcss_fullpage_remove';
+			} elseif ( 'asynchronously' === $minify_options['critical_css_type'] ) {
+				$active_features[] = 'criticalcss_abovefold_async';
+			}
 		}
 
 		// Delay.
@@ -1241,13 +1262,13 @@ class Utils {
 
 			// Font swap.
 			if ( ! empty( $minify_options['font_swap'] ) ) {
-				$active_features[] = 'font_display_swap';
+				$active_features[] = 'optional' === $minify_options['font_display_value'] ? 'font_display_optional' : 'font_display_swap';
 			}
 		}
 
 		// GZip.
 		if ( self::get_module( 'gzip' )->is_active() ) {
-			$active_features[] = 'GZip';
+			$active_features[] = 'br' === get_option( 'wphb_compression_type' ) || $hb_cdn ? 'Brotli' : 'GZip';
 		}
 
 		// Gravatar.
@@ -1255,14 +1276,11 @@ class Utils {
 			$active_features[] = 'Gravatar';
 		}
 
-		// Caching.
-		if ( self::get_module( 'caching' )->is_active() ) {
-			$active_features[] = 'Caching';
-		}
-
 		// Page Caching.
 		if ( self::get_module( 'page_cache' )->is_active() ) {
-			$active_features[] = 'Page Caching';
+			if ( ! self::get_api()->hosting->has_fast_cgi_header() ) {
+				$active_features[] = 'Page Caching';
+			}
 
 			$options = self::get_module( 'page_cache' )->get_options();
 			if ( ! empty( $options['preload'] ) && ! empty( $options['preload_type'] ['home_page'] ) ) {
@@ -1289,25 +1307,48 @@ class Utils {
 		if ( isset( $advanced_options['lazy_load'] ) && $advanced_options['lazy_load']['enabled'] ) {
 			$active_features[] = 'lazy_comments';
 		}
+
 		// Remove_query_strings (Advanced tools).
 		if ( ! empty( $advanced_options['query_string'] ) ) {
 			$active_features[] = 'remove_query_strings';
 		}
+
 		// Disable_cart_fragments (Advanced tools).
 		if ( ! empty( $advanced_options['cart_fragments'] ) ) {
 			$active_features[] = 'disable_cart_fragments';
 		}
+
 		// Remove_emojis (Advanced tools).
 		if ( ! empty( $advanced_options['emoji'] ) ) {
 			$active_features[] = 'remove_emojis';
 		}
+
 		// Prefetch_dns (Advanced tools).
 		if ( ! empty( $advanced_options['prefetch'] ) ) {
 			$active_features[] = 'prefetch_dns';
 		}
+
 		// Preconnect_domains (Advanced tools).
 		if ( ! empty( $advanced_options['preconnect'] ) ) {
 			$active_features[] = 'preconnect_domains';
+		}
+
+		// Track hosting cache.
+		if ( self::get_api()->hosting->has_fast_cgi_header() ) {
+			$active_features[] = 'hosting_static_cache';
+		}
+
+		// Track high frequency site.
+		if ( self::is_site_hosted_on_wpmudev() ) {
+			$active_features[] = Fast_CGI::is_high_frequency_hosted_site() ? 'hosted_high_frequency' : 'hosted_regular';
+		}
+
+		// Track browser cache status.
+		$active_features[] = self::wphb_get_browser_status_for_mp();
+
+		// Viewport_meta (Advanced tools).
+		if ( ! empty( $advanced_options['viewport_meta'] ) ) {
+			$active_features[] = 'viewport_meta';
 		}
 
 		/**
@@ -1322,6 +1363,22 @@ class Utils {
 		$active_features = apply_filters( 'wphb_tracking_active_features', $active_features );
 
 		return $active_features;
+	}
+
+	/**
+	 * Returns browser caching status for MP.
+	 *
+	 * @return string
+	 */
+	public static function wphb_get_browser_status_for_mp() {
+		$caching_data = self::get_module( 'caching' )->get_analysis_data( true );
+		foreach ( $caching_data as $data ) {
+			if ( empty( $data ) || $data < YEAR_IN_SECONDS ) {
+				return 'browser_caching_fail';
+			}
+		}
+
+		return 'browser_caching_pass';
 	}
 
 	/**
@@ -1493,8 +1550,8 @@ class Utils {
 				continue;
 			}
 
-			$display_value                                = preg_replace( '/[^0-9,.]/', '', $rule_result->displayValue );
-			$mobile_data[ $metrics[ $rule ] . '_mobile' ] = isset( $display_value ) ? esc_html( $display_value ) : 'N/A';
+			$display_value                                = ! empty( $rule_result->displayValue ) ? preg_replace( '/[^0-9,.]/', '', $rule_result->displayValue ) : 'N/A';
+			$mobile_data[ $metrics[ $rule ] . '_mobile' ] = $display_value;
 		}
 
 		foreach ( $desktop_report->metrics as $rule => $rule_result ) {
@@ -1502,8 +1559,8 @@ class Utils {
 				continue;
 			}
 
-			$display_value                                  = preg_replace( '/[^0-9,.]/', '', $rule_result->displayValue );
-			$desktop_data[ $metrics[ $rule ] . '_desktop' ] = isset( $display_value ) ? esc_html( $display_value ) : 'N/A';
+			$display_value                                  = ! empty( $rule_result->displayValue ) ? preg_replace( '/[^0-9,.]/', '', $rule_result->displayValue ) : 'N/A';
+			$desktop_data[ $metrics[ $rule ] . '_desktop' ] = $display_value;
 		}
 
 		return array_merge( $mobile_data, $desktop_data );
@@ -1527,5 +1584,55 @@ class Utils {
 	 */
 	public static function is_ao_processing() {
 		return get_transient( 'wphb-processing' ); // Input var ok.
+	}
+
+	/**
+	 * Get cache page title.
+	 *
+	 * @since 3.9.0
+	 *
+	 * @return string
+	 */
+	public static function get_cache_page_title() {
+		if ( self::get_api()->hosting->has_fast_cgi_header() ) {
+			return __( 'Page Caching - Static Server Cache', 'wphb' );
+		}
+
+		return self::get_module( 'page_cache' )->is_active() ? __( 'Page Caching - Local Page Cache', 'wphb' ) : __( 'Page Caching', 'wphb' );
+	}
+
+	/**
+	 * Determines whether the site is Hosted on WPMUDEV.
+	 *
+	 * @since 3.9.0
+	 *
+	 * @return bool True if the site is Hosted on WPMUDEV, false otherwise.
+	 */
+	public static function is_site_hosted_on_wpmudev() {
+		return isset( $_SERVER['WPMUDEV_HOSTED'] );
+	}
+
+	/**
+	 * Determines whether the homepage preload is enabled or not.
+	 *
+	 * @since 3.9.0
+	 *
+	 * @return bool
+	 */
+	public static function is_homepage_preload_enabled() {
+		$options = self::get_module( 'page_cache' )->get_options();
+
+		return isset( $options['preload_type'] ) && $options['preload_type']['home_page'];
+	}
+
+	/**
+	 * Determines whether the site is subsite or not.
+	 *
+	 * @since 3.9.0
+	 *
+	 * @return bool True if the site is subsite, false otherwise.
+	 */
+	public static function is_subsite() {
+		return is_multisite() && ! is_network_admin();
 	}
 }

@@ -337,6 +337,10 @@ class Critical_Css extends Module {
 			return false;
 		}
 
+		if ( ! apply_filters( 'wphb_should_add_critical_css', true ) ) {
+			return false;
+		}
+
 		if ( ( defined( 'WPHBDONOTOPTIMIZE' ) && WPHBDONOTOPTIMIZE ) || Utils::is_amp() || Utils::wphb_is_page_builder() || is_preview() || is_customize_preview() ) {
 			return false;
 		}
@@ -395,7 +399,6 @@ class Critical_Css extends Module {
 			if ( false !== $pos ) {
 				// IF critical css is generated.
 				$generated_critical = apply_filters( 'wphb_generated_used_css', file_get_contents( $used_css_path ) );
-				$generated_critical = $this->fonts->add_font_display_swap_to_all_font_faces( $generated_critical );
 				$used_css_output    = $this->get_used_css_markup( $type, $generated_critical );
 				$html               = substr_replace( $html, '</title>' . $used_css_output, $pos, 8 );
 				$html               = $this->fonts->add_preload_to_fonts_in_used_css( $html, $generated_critical );

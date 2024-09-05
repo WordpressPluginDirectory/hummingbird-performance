@@ -53,6 +53,7 @@ class Minification extends Page {
 
 		// We are here from a performance report - enable advanced mode.
 		if ( isset( $_GET['enable-advanced-settings'] ) ) {
+			check_admin_referer( 'wphb-enable-advanced-settings' );
 			Settings::update_setting( 'view', 'advanced', 'minify' );
 			$redirect = true;
 		}
@@ -67,8 +68,14 @@ class Minification extends Page {
 			}
 		}
 
+		// If free user detected then update the preload_fonts_mode to manual.
+		if ( isset( $options['preload_fonts_mode'] ) && 'manual' !== $options['preload_fonts_mode'] && ( ! Utils::is_member() || empty( $options['critical_css'] ) ) ) {
+			Settings::update_setting( 'preload_fonts_mode', 'manual', 'minify' );
+		}
+
 		// Re-check files button clicked.
 		if ( isset( $_POST['recheck-files'] ) || isset( $_GET['recheck-files'] ) ) { // Input var ok.
+			check_admin_referer( 'wphb-recheck-files' );
 			$minify_module->clear_cache( false );
 
 			$collector = $minify_module->sources_collector;
@@ -470,6 +477,8 @@ class Minification extends Page {
 				'font_optimization'              => Settings::get_setting( 'font_optimization', 'minify' ),
 				'preload_fonts'                  => Settings::get_setting( 'preload_fonts', 'minify' ),
 				'font_swap'                      => Settings::get_setting( 'font_swap', 'minify' ),
+				'font_display_value'             => Settings::get_setting( 'font_display_value', 'minify' ),
+				'preload_fonts_mode'             => Settings::get_setting( 'preload_fonts_mode', 'minify' ),
 				'is_member'                      => Utils::is_member(),
 				'critical_css'                   => Settings::get_setting( 'critical_css', 'minify' ),
 				'critical_css_type'              => Settings::get_setting( 'critical_css_type', 'minify' ),

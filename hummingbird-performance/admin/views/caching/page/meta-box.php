@@ -21,6 +21,8 @@
  * @var array         $settings            Settings array.
  */
 
+use Hummingbird\Core\Utils;
+
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
@@ -36,7 +38,13 @@ if ( is_wp_error( $error ) ) {
 		$notice = esc_html__( 'Page caching is currently active. You are storing your assets on the CDN in the Asset Optimization module. Hummingbird will automatically purge your cache when assets on the CDN expire (after every two months).', 'wphb' );
 	}
 
-	$this->admin_notices->show_inline( $notice );
+	$notice_type = 'success';
+	if ( ! Utils::is_member() && Utils::is_site_hosted_on_wpmudev() ) {
+		$notice      = esc_html__( 'Local page caching is currently active. To switch to Static Server Cache, please connect the WPMU Dev Dashboard plugin.', 'wphb' );
+		$notice_type = 'warning';
+	}
+
+	$this->admin_notices->show_inline( $notice, $notice_type );
 }
 ?>
 
@@ -314,11 +322,18 @@ if ( is_wp_error( $error ) ) {
 		</div>
 
 		<div class="sui-form-field">
-			<label for="cache_identifier" class="sui-toggle">
+			<label for="cache_identifier" class="sui-toggle"<?php if ( ! \Hummingbird\Core\Utils::is_member() ) : ?>
+				onclick="wphbMixPanel.track( 'indentify_cached_pages_interest' ); this.onclick=null;"<?php endif; ?>>
 				<input type="hidden" name="settings[cache_identifier]" value="0">
 				<input type="checkbox" name="settings[cache_identifier]" id="cache_identifier" value="1" aria-labelledby="cache_identifier-label"
-					<?php checked( $settings['settings']['cache_identifier'] ); ?>
-					<?php disabled( ! \Hummingbird\Core\Utils::is_member() ); ?>>
+					<?php
+					if ( \Hummingbird\Core\Utils::is_member() ) {
+						checked( $settings['settings']['cache_identifier'] );
+					}
+					?>
+					<?php if ( ! \Hummingbird\Core\Utils::is_member() ) : ?>
+						onclick="return false;"<?php endif; ?>
+				>
 				<span class="sui-toggle-slider" aria-hidden="true"></span>
 				<span id="cache_identifier-label" class="sui-toggle-label">
 					<?php esc_html_e( 'Identify cached pages', 'wphb' ); ?>
@@ -494,8 +509,11 @@ if ( is_wp_error( $error ) ) {
 			<?php esc_html_e( 'You can deactivate page caching at any time. ', 'wphb' ); ?>
 		</span>
 	</div>
+	<?php
+		$preload_event = isset( $options['preload_type'] ) && $options['preload_type']['home_page'] ? 'enabled' : 'disabled';
+	?>
 	<div class="sui-box-settings-col-2 wphb-deactivate-pc">
-		<a href="<?php echo esc_url( $deactivate_url ); ?>" class="sui-button sui-button-ghost sui-button-icon-left" onclick="wphbMixPanel.disableFeature( 'Page Caching' )">
+		<a href="<?php echo esc_url( $deactivate_url ); ?>" class="sui-button sui-button-ghost sui-button-icon-left" onclick="wphbMixPanel.trackPageCachingSettings( 'deactivate', 'local_page_cache', 'caching_settings', 'na', '<?php echo esc_attr( $preload_event ); ?>' );">
 			<span class="sui-icon-power-on-off" aria-hidden="true"></span>
 			<?php esc_html_e( 'Deactivate', 'wphb' ); ?>
 		</a>

@@ -5,11 +5,44 @@
 
 	const WPHBGlobal = {
 		init() {
+			this.registerUpsellClick();
 			this.registerClearAllCache();
 			this.registerClearNetworkCache();
 			this.registerClearCacheFromNotice();
 			this.registerClearCloudflare();
 			this.registerSafeModeActions();
+			this.registerSwitchCriticalCSS();
+		},
+
+		/**
+		 * Switch to critical CSS from legacy.
+		 *
+		 * @since 3.9.3
+		 */
+		registerSwitchCriticalCSS() {
+			const btn = document.getElementById(
+				'wphb-switch-critical-from-legacy'
+			);
+
+			if ( ! btn ) {
+				return;
+			}
+
+			btn.addEventListener( 'click', () =>
+				jQuery
+				.ajax( {
+					url: wphbGlobal.ajaxurl,
+					method: 'POST',
+					data: {
+						nonce: wphbGlobal.nonce,
+						action: 'wphb_switch_to_critical_css_from_legacy',
+					},
+				} )
+				.done( function() {
+					// Redirect to a response page
+					window.location.href = wphbGlobal.minify_url + '&view=tools';
+				} )
+			);
 		},
 
 		/**
@@ -52,6 +85,31 @@
 			btn.addEventListener( 'click', () =>
 				this.post( 'wphb_global_clear_cache' )
 			);
+		},
+
+		/**
+		 * Track upsell menu click.
+		 *
+		 * @since 3.9.0
+		 */
+		registerUpsellClick() {
+			const upsellSubmenuLink = document.querySelector( '#toplevel_page_wphb a[href^="https://wpmudev.com"]' );
+
+			if ( ! upsellSubmenuLink ) {
+				return;
+			}
+
+			if ( ! wphb.mixpanel.enabled ) {
+				return;
+			}
+
+			if ( ! wphbGlobal.is_hb_page ) {
+				require( './mixpanel' );
+			}
+
+			upsellSubmenuLink.addEventListener( 'click', () => {
+				window.wphbMixPanel.trackProUpsell( 'pro_upsell', 'cta_clicked' );
+			});	
 		},
 
 		/**

@@ -53,8 +53,7 @@ class SetupWizard extends React.Component {
 			 */
 			step: 1,
 			issues: {
-				advCacheFile: false,
-				fastCGI: false
+				advCacheFile: false
 			},
 			showConflicts: false,
 			settings: {
@@ -63,6 +62,8 @@ class SetupWizard extends React.Component {
 				aoCdn: Boolean( this.props.wphbData.isMember ),
 				uptimeEnable: Boolean( this.props.wphbData.hasUptime ),
 				cacheEnable: true,
+				fastCGI: Boolean( this.props.wphbData.isFastCGISupported ) ? true : false,
+				isFastCGISupported: Boolean( this.props.wphbData.isFastCGISupported ),
 				cacheOnMobile: true,
 				clearOnComment: true,
 				cacheHeader: true,
@@ -107,7 +108,7 @@ class SetupWizard extends React.Component {
 	 * Go to next step in wizard.
 	 */
 	nextStep() {
-		if ( 1 === this.state.step && ( this.state.issues.advCacheFile || this.state.issues.fastCGI ) ) {
+		if ( 1 === this.state.step && this.state.issues.advCacheFile ) {
 			this.setState( { showConflicts: true } );
 			return;
 		}
@@ -116,11 +117,6 @@ class SetupWizard extends React.Component {
 
 		// If Asset optimization and free user - skip Uptime step.
 		if ( 2 === this.state.step && ! this.state.hasUptime ) {
-			step++;
-		}
-
-		// If Uptime and enabled FastCGI - skip Page cache step.
-		if ( 3 === this.state.step && this.state.issues.fastCGI ) {
 			step++;
 		}
 
@@ -156,11 +152,6 @@ class SetupWizard extends React.Component {
 	prevStep() {
 		let step = this.state.step - 1;
 
-		// Skip Page cache step if FastCGI is enabled.
-		if ( 5 === this.state.step && this.state.issues.fastCGI ) {
-			step--;
-		}
-
 		// Skip Uptime step for free users.
 		if ( 4 === this.state.step && ! this.state.hasUptime ) {
 			step--;
@@ -176,20 +167,13 @@ class SetupWizard extends React.Component {
 	 */
 	finish( goToPage = 'pluginDash' ) {
 		this.setState( { loading: true } );
+		if ( 'string' !== typeof goToPage ) {
+			goToPage = 'pluginDash';
+		}
+
 		this.state.api
-			.post( 'complete_wizard' )
+			.post( 'complete_wizard', goToPage )
 			.then( () => {
-				if ( 'string' !== typeof goToPage ) {
-					goToPage = 'pluginDash';
-				}
-
-				if ( 'runPerf' === goToPage ) {
-					window.wphbMixPanel.track( 'plugin_scan_started', {
-						score_mobile_previous: '-',
-						score_desktop_previous: '-',
-					} );
-				}
-
 				window.location.href = getLink( goToPage );
 			} )
 			.catch( ( error ) => window.console.log( error ) );
@@ -259,14 +243,6 @@ class SetupWizard extends React.Component {
 		const settings = { ...this.state.settings };
 		settings[ e.target.id ] = e.target.checked;
 
-		if ( 'tracking' === e.target.id ) {
-			if ( e.target.checked ) {
-				window.wphbMixPanel.optIn();
-			} else {
-				window.wphbMixPanel.optOut();
-			}
-		}
-
 		this.setState( { settings } );
 	}
 
@@ -279,6 +255,11 @@ class SetupWizard extends React.Component {
 	toggleModule( action, setting ) {
 		const settings = { ...this.state.settings };
 		settings[ setting ] = 'enable' === action;
+
+		if ( 'cacheEnable' === setting && ( 'enable' === action || 'disable' === action ) ) {
+			settings[ 'fastCGI' ] = false;
+		}
+
 		this.setState( { settings } );
 	}
 
