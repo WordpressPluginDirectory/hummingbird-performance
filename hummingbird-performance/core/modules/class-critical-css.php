@@ -69,6 +69,20 @@ class Critical_Css extends Module {
 	private $fonts;
 
 	/**
+	 * Holds excluded stylesheet IDs.
+	 *
+	 * @var array
+	 */
+	public $excluded_stylesheet_ids = array();
+
+	/**
+	 * Holds all combined exclusions.
+	 *
+	 * @var array
+	 */
+	public $combined_exclusions = null;
+
+	/**
 	 * Initialize module.
 	 *
 	 * @since 3.6.0
@@ -95,6 +109,7 @@ class Critical_Css extends Module {
 		add_action( 'wp_footer', array( $this, 'schedule_cron' ), 20000 );
 		add_action( 'wp_head', array( $this, 'insert_load_css_script' ) );
 		add_action( 'after_switch_theme', array( $this, 'regenerate_critical_css' ) );
+		add_filter( 'wphb_minify_resource', array( $this, 'filter_resource_minify' ), 10, 4 );
 	}
 
 	/**
@@ -164,7 +179,13 @@ class Critical_Css extends Module {
 			return;
 		}
 
-		$url = add_query_arg( 'hb_doing_critical', 1, $url );
+		$url = add_query_arg(
+			array(
+				'avoid-minify'      => true,
+				'hb_doing_critical' => 1,
+			),
+			$url
+		);
 
 		$queue = array(
 			'url'            => $url,
@@ -216,7 +237,7 @@ class Critical_Css extends Module {
 		foreach ( $taxonomies as $taxonomy ) {
 			$get_term_url = get_term_link( (int) $taxonomy->ID );
 			if ( ! empty( $get_term_url ) && substr( $get_term_url, 0, $site_url_length ) === get_site_url() ) {
-				if ( ! $this->skip_page_type( $taxonomy->taxonomy ) ) {
+				if ( ! $this->skip_page_type( 'category' ) ) {
 					$this->add_item( $get_term_url, $taxonomy->taxonomy );
 				}
 			}
@@ -346,6 +367,10 @@ class Critical_Css extends Module {
 			return false;
 		}
 
+		if ( Utils::get_module( 'exclusions' )->is_current_page_excluded( 'critical_css' ) ) {
+			return false;
+		}
+
 		return true;
 	}
 
@@ -471,9 +496,15 @@ class Critical_Css extends Module {
 					continue;
 				}
 
+				$stylesheet_attr = $stylesheet[0];
+
+				if ( $this->is_stylesheet_excluded( $stylesheet_attr ) ) {
+					continue;
+				}
+
 				$style_href = trim( $stylesheet[2] );
-				$new_link   = preg_replace( '#href=([\'"]).+?\1#', 'data-wphbdelayedstyle="' . $style_href . '"', $stylesheet[0] );
-				$html       = str_replace( $stylesheet[0], $new_link, $html );
+				$new_link   = preg_replace( '#href=([\'"]).+?\1#', 'data-wphbdelayedstyle="' . $style_href . '"', $stylesheet_attr );
+				$html       = str_replace( $stylesheet_attr, $new_link, $html );
 			}
 
 			$script = '<script type="text/javascript" id="wphb-delayed-styles-js">
@@ -500,6 +531,39 @@ class Critical_Css extends Module {
 	}
 
 	/**
+	 * Check if the stylesheet is excluded from critical css.
+	 *
+	 * @param string $stylesheet_attr Stylesheet attribute.
+	 *
+	 * @return array
+	 */
+	public function is_stylesheet_excluded( $stylesheet_attr ) {
+		$combined_exclusions = $this->get_combined_exclusions();
+
+		return array_reduce(
+			$combined_exclusions,
+			fn( $carry, $item ) => $carry || stripos( $stylesheet_attr, $item ) !== false,
+			false
+		);
+	}
+
+	/**
+	 * Get all combined exclusions.
+	 *
+	 * @return array
+	 */
+	private function get_combined_exclusions() {
+		if ( is_null( $this->combined_exclusions ) ) {
+			$this->combined_exclusions = array_merge(
+				Utils::get_module( 'exclusions' )->get_combined_asset_path_exclusion_list_for_critical_css(),
+				$this->excluded_stylesheet_ids
+			);
+		}
+
+		return $this->combined_exclusions;
+	}
+
+	/**
 	 * Remove all CSS which was used on the current page.
 	 *
 	 * @param string $html HTML content.
@@ -511,7 +575,12 @@ class Critical_Css extends Module {
 
 		if ( ! empty( $stylesheets ) ) {
 			foreach ( $stylesheets as $stylesheet ) {
-				$html = str_replace( $stylesheet[0], '', $html );
+				$stylesheet_attr = $stylesheet[0];
+				if ( $this->is_stylesheet_excluded( $stylesheet_attr ) ) {
+					continue;
+				}
+
+				$html = str_replace( $stylesheet_attr, '', $html );
 			}
 		}
 
@@ -693,11 +762,11 @@ class Critical_Css extends Module {
 			$type = get_post_type() !== false ? get_post_type() : 'single';
 		} elseif ( $wp_query->is_category ) {
 			$type = 'category';
-		} elseif ( $wp_query->is_tag ) {
-			$type = 'post_tag';
 		} elseif ( $wp_query->is_tax ) {
 			$term = get_queried_object();
 			$type = $term->taxonomy;
+		} elseif ( $wp_query->is_tag ) {
+			$type = 'post_tag';
 		} elseif ( $wp_query->is_archive ) {
 			$type = $wp_query->is_day ? 'day' : ( $wp_query->is_month ? 'month' : ( $wp_query->is_year ? 'year' : ( $wp_query->is_author ? 'author' : 'archive' ) ) );
 		}
@@ -1034,7 +1103,8 @@ class Critical_Css extends Module {
 			}
 		}
 
-		$response      = $api->critical_css->generate_critical_css( $urls, $api_call_type );
+		$ignored_files = Utils::get_module( 'exclusions' )->get_ignored_files_for_critical_api();
+		$response      = $api->critical_css->generate_critical_css( $urls, $api_call_type, $ignored_files );
 		$is_type_error = true;
 
 		if ( ! is_wp_error( $response ) && ! empty( $response ) ) {
@@ -1331,6 +1401,10 @@ class Critical_Css extends Module {
 	 * @return bool
 	 */
 	public function skip_page_type( $type ) {
+		if ( apply_filters( 'wphb_should_skip_page_type', false, $type ) ) {
+			return true;
+		}
+
 		$minify_options                     = Settings::get_settings( 'minify' );
 		$critical_page_types                = $minify_options['critical_page_types'];
 		$critical_skipped_custom_post_types = $minify_options['critical_skipped_custom_post_types'];
@@ -1343,6 +1417,10 @@ class Critical_Css extends Module {
 			}
 
 			if ( in_array( $type, $all_pages_type, true ) && ! in_array( $type, $critical_page_types, true ) ) {
+				return true;
+			}
+
+			if ( taxonomy_exists( $type ) && ! in_array( 'category', $critical_page_types, true ) ) {
 				return true;
 			}
 		}
@@ -1470,9 +1548,9 @@ class Critical_Css extends Module {
 
 		// Execute the query and return the results.
 		$results = $wpdb->get_results( $query );
+		$results = ! is_wp_error( $results ) ? $results : array();
 
-		// Return results or an empty array if there's an error.
-		return ! is_wp_error( $results ) ? $results : array();
+		return apply_filters( 'wphb_public_taxonomies_results', $results );
 	}
 
 	/**
@@ -1814,5 +1892,44 @@ class Critical_Css extends Module {
 			'width'  => $is_mobile ? 414 : 1920,
 			'height' => $is_mobile ? 915 : 1080,
 		);
+	}
+
+	/**
+	 * Get the critical mode for MP.
+	 */
+	public function get_critical_mode_for_mp() {
+		$options = Utils::get_module( 'minify' )->get_options();
+
+		if ( 'asynchronously' === $options['critical_css_type'] ) {
+			return 'load_stylesheet_on_user_interaction' === $options['above_fold_load_stylesheet_method'] ? 'abovefold_delay' : 'abovefold_async';
+		}
+
+		return 'remove_unused' === $options['critical_css_remove_type'] ? 'fullpage_remove' : 'fullpage_delay';
+	}
+
+	/**
+	 * Filter minified resources.
+	 *
+	 * @param bool   $value   Current value.
+	 * @param string $handle  Resource handle.
+	 * @param string $type    Script or style.
+	 * @param string $url     Script URL.
+	 *
+	 * @return bool
+	 */
+	public function filter_resource_minify( $value, $handle, $type, $url ) {
+		if ( 'styles' === $type ) {
+			$patterns = Utils::get_module( 'exclusions' )->get_combined_asset_path_exclusion_list_for_critical_css();
+			if ( empty( $patterns ) ) {
+				return $value;
+			}
+
+			$combined_pattern = '#(' . implode( '|', array_map( 'preg_quote', $patterns ) ) . ')#i';
+			if ( preg_match( $combined_pattern, $url ) ) {
+				$this->excluded_stylesheet_ids[] = $handle;
+			}
+		}
+
+		return $value;
 	}
 }

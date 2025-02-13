@@ -136,7 +136,7 @@ class Minification extends Page {
 						'chat'  => Utils::get_link( 'chat' ),
 						'forum' => Utils::get_link( 'support' ),
 					),
-					'cdnUpsell'      => Utils::get_link( 'plugin', 'hummingbird_topsummary_cdnbutton' ),
+					'cdnUpsell'      => Utils::get_link( 'plugin', 'hummingbird_ao_summary_cdn_button' ),
 					'delayUpsell'    => Utils::get_link( 'plugin', 'hummingbird_delay_js_ao_summary' ),
 					'criticalUpsell' => Utils::get_link( 'plugin', 'hummingbird_criticalcss_ao_summary' ),
 					'isEoPage'       => 'tools' === $current_page ? true : false,
@@ -489,7 +489,9 @@ class Minification extends Page {
 				'pages'                             => Page_Cache::get_page_types(),
 				'critical_css_status'               => Utils::get_module( 'critical_css' )->critical_css_status_for_queue(),
 				'critical_css_generation_notice'    => Utils::get_module( 'critical_css' )->critical_css_generation_complete_notice(),
+				'delay_js_keywords_advanced_view'   => Settings::get_setting( 'delay_js_keywords_advanced_view', 'minify' ),
 				'above_fold_load_stylesheet_method' => Settings::get_setting( 'above_fold_load_stylesheet_method', 'minify' ),
+				'delay_js_exclude_inline_js'        => Settings::get_setting( 'delay_js_exclude_inline_js', 'minify' ),
 				'custom_post_types'                 => get_post_types(
 					array(
 						'public'   => true,

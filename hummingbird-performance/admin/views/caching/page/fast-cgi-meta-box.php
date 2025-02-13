@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 ?>
 
-<p><?php esc_html_e( 'Hummingbird stores static HTML copies of your pages and posts to decrease page load time.', 'wphb' ); ?></p>
+<p><?php echo esc_html( Utils::get_page_cache_description() ); ?></p>
 
 <?php
 $notice = Utils::is_member() ? esc_html__( 'Static Server Cache is currently active.', 'wphb' ) : esc_html__( 'Static Server Cache is currently active. If you wish to update settings or switch to Local Page Cache, please ensure you are connected to the WPMU DEV Dashboard plugin.', 'wphb' );
@@ -86,6 +86,18 @@ if ( ! $is_fast_cgi_supported ) {
 				</span>
 				<span class="sui-description sui-toggle-description">
 					<?php esc_html_e( 'The page cache will be cleared after each comment made on a post.', 'wphb' ); ?>
+				</span>
+			</label>
+		</div>
+		<div class="sui-form-field">
+			<label for="clear_update" class="sui-toggle">
+				<input type="checkbox" name="settings[clear_update]" id="clear_update" value="1" aria-labelledby="clear_update-label" <?php checked( $settings['settings']['clear_update'] ); ?>>
+				<span class="sui-toggle-slider" aria-hidden="true"></span>
+				<span id="clear_update-label" class="sui-toggle-label">
+					<?php esc_html_e( 'Clear full cache when post/page is updated', 'wphb' ); ?>
+				</span>
+				<span class="sui-description sui-toggle-description">
+					<?php esc_html_e( 'If one of your pages or posts gets updated, turning this setting on will also regenerate all cached archives and taxonomies for all post types.', 'wphb' ); ?>
 				</span>
 			</label>
 		</div>

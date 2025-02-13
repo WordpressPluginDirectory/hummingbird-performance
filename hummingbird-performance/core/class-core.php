@@ -98,6 +98,8 @@ class Core {
 		new Integration\WooCommerce();
 		new Integration\WCML();
 		new Integration\Gtranslate();
+		new Integration\Elementor();
+		new Integration\The_Events_Calendar();
 	}
 
 	/**
@@ -109,7 +111,7 @@ class Core {
 		 */
 		$modules = apply_filters(
 			'wp_hummingbird_modules',
-			array( 'minify', 'gzip', 'caching', 'performance', 'uptime', 'cloudflare', 'gravatar', 'page_cache', 'advanced', 'rss', 'redis', 'delayjs', 'critical_css', 'mixpanel_analytics' )
+			array( 'minify', 'gzip', 'caching', 'performance', 'uptime', 'cloudflare', 'gravatar', 'page_cache', 'advanced', 'rss', 'redis', 'delayjs', 'critical_css', 'mixpanel_analytics', 'exclusions' )
 		);
 
 		array_walk( $modules, array( $this, 'load_module' ) );
